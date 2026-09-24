@@ -136,6 +136,28 @@ Im Ordner `samples/` (alle Daten frei erfunden, erzeugt mit `tools/generate_samp
 | `pruefauftrag_digital.pdf` | Digitales PDF mit Textebene – kein OCR nötig | `VALID` |
 | `anfrage_brief_scan.png` | Unstrukturierter Brief, USt-IdNr. mit falscher Prüfziffer | `NEEDS_REVIEW` (`INVALID_CHECKSUM`) |
 
+## Modellvergleich
+
+Gemessen auf denselben drei Beispieldokumenten, ohne Änderung am Code – das Modell
+wird über die Umgebungsvariable `OLLAMA_MODEL` gewählt.
+
+| Dokument | qwen2.5:3b (CPU) | qwen2.5:7b (GPU, RTX 4070) |
+|---|---|---|
+| `pruefauftrag_scan.png` | NEEDS_REVIEW: Feldbezeichnungen im Wert ("Firma …"), Ankreuzfeld als "Kl" in der Norm | **VALID**, alle Felder sauber · 2,4–3,3 s* |
+| `pruefauftrag_digital.pdf` | VALID · 14,9 s | **VALID** · 2,4 s |
+| `anfrage_brief_scan.png` | NEEDS_REVIEW, Prüfziffer erkannt – PLZ nicht extrahiert | **NEEDS_REVIEW** nur wegen Prüfziffer, PLZ korrekt · 3,3 s |
+
+\* Der erste Aufruf nach dem Start dauert länger, weil das Modell in den VRAM geladen wird (~70 s).
+
+**Beobachtung:** Die Extraktionsfehler der ersten Runde lagen am Modell, nicht an der
+Pipeline – der Wechsel auf das größere Modell hat sie ohne Codeänderung behoben. Die
+Prüfziffernvalidierung hat dagegen in beiden Runden zuverlässig gegriffen: Das Modell
+übernimmt die fehlerhafte USt-IdNr. aus dem Dokument, die deterministische Prüfung in
+Java fängt sie ab. Genau dafür ist die Trennung "Modell schlägt vor, Service entscheidet"
+gedacht.
+
+Empfehlung: mit GPU und mindestens 8 GB VRAM `OLLAMA_MODEL=qwen2.5:7b`, sonst `qwen2.5:3b`.
+
 ## Tests
 
 ```bash
