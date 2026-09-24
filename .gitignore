@@ -1,0 +1,7 @@
+target/
+__pycache__/
+.pytest_cache/
+.idea/
+*.iml
+.vscode/
+.DS_Store

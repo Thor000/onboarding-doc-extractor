@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokument-Extraktion</title>
+<style>
+  :root { --fg:#1d2330; --muted:#5f6b7a; --line:#dde3ea; --bg:#f6f8fa; --ok:#1a7f45; --warn:#b26b00; --err:#c0342b; --accent:#1f4e79; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 24px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:16px; }
+  form { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .status { display:inline-block; padding:3px 10px; border-radius:99px; font-weight:600; font-size:13px; }
+  .VALID { background:#e3f4ea; color:var(--ok); }
+  .NEEDS_REVIEW { background:#fff1dc; color:var(--warn); }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  td:first-child { color:var(--muted); width:34%; }
+  .ERROR { color:var(--err); } .WARNING { color:var(--warn); }
+  .meta { color:var(--muted); font-size:13px; margin-top:10px; }
+  ul.issues { margin:8px 0 0; padding-left:18px; }
+  .error-box { color:var(--err); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kundendaten aus Dokumenten extrahieren</h1>
+  <p class="lead">Scan, Foto oder PDF hochladen – OCR, lokales Sprachmodell und regelbasierte Prüfung laufen nacheinander.</p>
+
+  <div class="card">
+    <form id="upload">
+      <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" required>
+      <button type="submit">Auswerten</button>
+      <span id="busy" class="meta" hidden>wird verarbeitet … (beim ersten Aufruf lädt das Modell, das kann dauern)</span>
+    </form>
+  </div>
+
+  <div id="result"></div>
+</main>
+
+<script>
+const LABELS = {
+  companyName: "Firma", street: "Straße", postalCode: "PLZ", city: "Ort", country: "Land",
+  vatId: "USt-IdNr.", contactPerson: "Ansprechpartner/in", email: "E-Mail", phone: "Telefon",
+  product: "Produkt", standards: "Prüfnormen"
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+document.getElementById("upload").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target, button = form.querySelector("button"), busy = document.getElementById("busy");
+  const out = document.getElementById("result");
+  button.disabled = true; busy.hidden = false; out.innerHTML = "";
+  try {
+    const response = await fetch("/api/documents", { method: "POST", body: new FormData(form) });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || body.title || response.statusText);
+    out.innerHTML = render(body);
+  } catch (e) {
+    out.innerHTML = `<div class="card error-box">Fehler: ${esc(e.message)}</div>`;
+  } finally {
+    button.disabled = false; busy.hidden = true;
+  }
+});
+
+function render(r) {
+  const byField = {};
+  r.issues.forEach(i => (byField[i.field] ||= []).push(i));
+  const rows = Object.entries(LABELS).map(([key, label]) => {
+    const raw = r.data[key];
+    const value = Array.isArray(raw) ? raw.join(", ") : raw;
+    const notes = (byField[key] || []).map(i => `<div class="${i.severity}">⚠ ${esc(i.message)}</div>`).join("");
+    return `<tr><td>${label}</td><td>${value ? esc(value) : "<span class='meta'>–</span>"}${notes}</td></tr>`;
+  }).join("");
+  const docIssues = (byField.document || []).map(i => `<li class="${i.severity}">${esc(i.message)}</li>`).join("");
+  return `<div class="card">
+      <span class="status ${r.status}">${r.status === "VALID" ? "Gültig – kann übernommen werden" : "Bitte prüfen"}</span>
+      <strong style="margin-left:8px">${esc(r.filename)}</strong>
+      ${docIssues ? `<ul class="issues">${docIssues}</ul>` : ""}
+      <table style="margin-top:14px">${rows}</table>
+      <div class="meta">OCR: ${esc(r.ocr.method)}${r.ocr.meanConfidence != null ? `, Konfidenz ${r.ocr.meanConfidence} %` : ""}
+        · Modell: ${esc(r.model)} · ${r.durationMs} ms · ID ${esc(r.id)}</div>
+    </div>`;
+}
+</script>
+</body>
+</html>
