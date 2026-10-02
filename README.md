@@ -1,5 +1,7 @@
 # Onboarding Document Extractor
 
+[![CI](https://github.com/Thor000/onboarding-doc-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/Thor000/onboarding-doc-extractor/actions/workflows/ci.yml)
+
 Prototyp zur automatischen Auswertung von Kundendokumenten (Prüfaufträge, Anfragen, Formulare):
 Ein gescanntes oder digitales Dokument wird hochgeladen, per **OCR** in Text umgewandelt, von einem
 **lokalen Sprachmodell** in strukturierte Daten überführt und anschließend von einem **Java-Service
